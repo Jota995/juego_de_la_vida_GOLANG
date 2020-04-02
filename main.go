@@ -34,180 +34,179 @@ func main(){
 	fmt.Println("METODO-PARTICION:", *metodo_particion);
 	fmt.Println("SEMILLA:", *semilla);
 
-	//creacion de canales para 2 gorutines
-	c1 := make(chan int,int(*columns))
-	c2 := make(chan int,int(*columns))
-
-	t1 := make(chan [][]Celula)
-	t2 := make(chan [][]Celula)
-
 	var wg sync.WaitGroup
 	wg.Add(int(*num_gorutines))
-	
-	//creacion del tablero
-	var tablero = make([][]int, int(*rows));
-	for i := range tablero {
-    	tablero[i] = make([]int, int(*rows));
-	}
-	//creacion de las celulas
-	var celulas = make([][]Celula, int(*rows));
-	for i := range celulas {
-    	celulas[i] = make([]Celula, int(*rows));
-	}
 
-	//variable para obtener las mitades de los nuevos estados de los sub tableros
+	//array de canales de envio y de recivo
+	var array_channel_enviar []chan int
+	var array_channel_recivir []chan int
+
+	//array de porciones de celulas del tablero
+	var array_celulas_tablero []chan [][]Celula
+
+	var MitadCelulas1 = make([][]Celula, (int(*rows)/int(*num_gorutines)));
+	var MitadCelulas2 = make([][]Celula, (int(*rows)/int(*num_gorutines)));
+	//variable para obtener las mitades de los nuevos estados de los 2 sub tableros
 	var celulasmitad = make([][]Celula, int(*rows)/int(*num_gorutines));
+	var celulas = make([][]Celula, int(*rows));
+	var tablero = make([][]int, int(*rows));
 
 
+	//creacion para 2 gorutines
+	if int(*num_gorutines) == 2 {
 
-	var MitadCelulas1 = make([][]Celula, (int(*rows)/2));
-	for i := range MitadCelulas1 {
-    	MitadCelulas1[i] = make([]Celula, (int(*rows)/2)+1);
-	}
+		for i := 0 ; i < int(*num_gorutines) ; i++{
+			array_channel_enviar = append(array_channel_enviar, make(chan int,int(*columns)))
+		}
 
-	var MitadCelulas2 = make([][]Celula, (int(*rows)/2));
-	for i := range MitadCelulas2 {
-    	MitadCelulas2[i] = make([]Celula, (int(*rows)/2)+1);
-	}
+		for i := 0 ; i < int(*num_gorutines) ; i++{
+			array_channel_enviar = append(array_channel_enviar, make(chan int,int(*columns)))
+		}
 
-	rand.Seed(time.Now().UnixNano());
+		for i := 0 ; i < int(*num_gorutines) ; i++{
+			array_celulas_tablero = append(array_celulas_tablero, make(chan [][]Celula))
+		}
 
-	//semilla en la primera mitad del tablero
-	for i := 0 ; i < int(*columns) ; i++{
-		for j := 0 ; j < (int(*rows)/int(*num_gorutines)) ; j++{
-			celulas[i][j].estado = rand.Intn(1 - 0 + 1) + 0;
-		}	
-	}
-	//semilla en la segunda mitad del tablero
-	for i := 0 ; i < int(*columns) ; i++{
-		for j := int(*rows)/int(*num_gorutines)  ; j < int(*rows) ; j++{
-			celulas[i][j].estado = rand.Intn(1 - 0 + 1) + 0;
-		}	
-	}
-	
-	//borde derecho de la primera mitad del tablero
-	for i := 0 ; i < int(*columns) ; i++{
-		for j := (int(*rows)/int(*num_gorutines))-1 ; j < (int(*rows)/int(*num_gorutines)) ; j++{
-			c1 <- celulas[i][j].estado
-		}	
-	}
+		//variable para almacenar la mitad izquierda del tablero
+		for i := range MitadCelulas1 {
+			MitadCelulas1[i] = make([]Celula, (int(*rows)/int(*num_gorutines))+1);
+		}
+		//variable para almacenar la mitad derecha del tablero
+		for i := range MitadCelulas2 {
+			MitadCelulas2[i] = make([]Celula, (int(*rows)/int(*num_gorutines))+1);
+		}
 
-	//borde izquierdo de la segunda mitad del tablero
-	for i := 0 ; i < int(*columns) ; i++{
-		for j := (int(*rows)/int(*num_gorutines)) ; j < (int(*rows)/int(*num_gorutines))+1; j++{
-			c2 <- celulas[i][j].estado
-		}	
-	}
+		//creacion del tablero
+		for i := range tablero {
+			tablero[i] = make([]int, int(*rows));
+		}
+		//creacion de las celulas del tablero
+		for i := range celulas {
+			celulas[i] = make([]Celula, int(*rows));
+		}
+		rand.Seed(time.Now().UnixNano());
 
-
-	//estados de la primera mitad del tablero
-	for i := 0 ; i < int(*columns)/2 ; i++{
-		for j := 0 ; j < (int(*rows)/2) ; j++{
-			MitadCelulas1[i][j].estado = celulas[i][j].estado
-		}	
-	}
-
-	//estados de la segunda mitad del tablero
-	for i := 0 ; i < int(*columns)/2 ; i++{
-		for j := 1 ; j < (int(*rows)/2)+1 ; j++{
-			MitadCelulas2[i][j].estado = celulas[i][j].estado
-		}	
-	}
-
-	for true{
-		go func() {
-			defer wg.Done()
-			// pasar la fila izquierda de la segunda parte del tablero
-			for i := 0 ; i < (int(*rows)/int(*num_gorutines)) ; i++{
-				for j := (int(*rows)/int(*num_gorutines))-1 ; j < (int(*rows)/int(*num_gorutines)) ; j++{
-					MitadCelulas1[i][j].estado = <- c2
-				}	
-			}
-			//check a todos los vecinos de cada celula
-			for j := 0 ; j < int(*columns)/int(*num_gorutines) ; j++{
-				for k := 0 ; k < int(*rows)/int(*num_gorutines) ; k++{
-					MitadCelulas1[j][k].numVecinos = checkVecinos(MitadCelulas1,j,k);
-				}	
-			}
-			//cambiar el estado de las celulas
-			for i := 0 ; i < int(*columns)/int(*num_gorutines) ; i++{
-				for j := 0 ; j < int(*rows)/int(*num_gorutines) ; j++{
-					if ((celulas[i][j].estado == CELULA_MUERTA && celulas[i][j].numVecinos >=3) || (celulas[i][j].estado == CELULA_VIVA && (celulas[i][j].numVecinos == 2 || celulas[i][j].numVecinos == 3 ))) {
-						celulas[i][j].estado = CELULA_VIVA;
-					}else{
-						celulas[i][j].estado = CELULA_MUERTA;
-					}
-				}	
-			}
-	
-			//pasar borde derecho de la primera mitad del tablero
-			for i := 0 ; i < int(*columns) ; i++{
-				for j := (int(*rows)/int(*num_gorutines))-1 ; j < (int(*rows)/int(*num_gorutines)) ; j++{
-					c1 <- celulas[i][j].estado
-				}	
-			}
-	
-			//pasar el nuevo estado del primer lado del tablero
-			t1 <- MitadCelulas1
-	
-		}()
-
-		go func() {
-			defer wg.Done()
-			// pasar la fila derecha de la primera parte del tablero
-			for i := 0 ; i < (int(*columns)/int(*num_gorutines)) ; i++{
-				for j := 0 ; j < (int(*rows)/int(*num_gorutines)) - ((int(*rows)/int(*num_gorutines))-1) ; j++{
-					MitadCelulas2[i][j].estado = <- c1
-				}	
-			}
-	
-			//check a todos los vecinos de cada celula
-			for j := 0 ; j < int(*columns)/int(*num_gorutines) ; j++{
-				for k := 0 ; k < int(*rows)/int(*num_gorutines) ; k++{
-					MitadCelulas2[j][k].numVecinos = checkVecinos(MitadCelulas2,j,k);
-				}	
-			}
-			//cambiar el estado de las celulas
-			for i := 0 ; i < int(*columns)/int(*num_gorutines) ; i++{
-				for j := 0 ; j < int(*rows)/int(*num_gorutines) ; j++{
-					if ((celulas[i][j].estado == CELULA_MUERTA && celulas[i][j].numVecinos >=3) || (celulas[i][j].estado == CELULA_VIVA && (celulas[i][j].numVecinos == 2 || celulas[i][j].numVecinos == 3 ))) {
-						celulas[i][j].estado = CELULA_VIVA;
-					}else{
-						celulas[i][j].estado = CELULA_MUERTA;
-					}
-				}	
-			}
-			//pasar borde izquierdo de la segunda mitad del tablero
-			for i := 0 ; i < int(*columns) ; i++{
-				for j := (int(*rows)/int(*num_gorutines)) ; j < (int(*rows)/int(*num_gorutines))+1; j++{
-					c2 <- celulas[i][j].estado
-				}	
-			}
-			//pasar el nuevo estado del segundo lado del tablero
-			t2 <- MitadCelulas2
-	
-		}()
-
-		wg.Wait()
-
-		//obtener la primera mitad del tablero
-		celulasmitad = <- t1
+		//semilla en la primera mitad del tablero
 		for i := 0 ; i < int(*columns) ; i++{
 			for j := 0 ; j < (int(*rows)/int(*num_gorutines)) ; j++{
-				celulas[i][j].estado = celulasmitad[i][j].estado;
+				celulas[i][j].estado = rand.Intn(1 - 0 + 1) + 0;
+			}	
+		}
+		//semilla en la segunda mitad del tablero
+		for i := 0 ; i < int(*columns) ; i++{
+			for j := int(*rows)/int(*num_gorutines)  ; j < int(*rows) ; j++{
+				celulas[i][j].estado = rand.Intn(1 - 0 + 1) + 0;
 			}	
 		}
 
-		//obtener la segunda mitad del tablero
-		celulasmitad = <- t2
-		for i := 0 ; i < int(*columns) ; i++{
-			for j := int(*rows)/int(*num_gorutines) ; j < int(*rows) ; j++{
-				celulas[i][j].estado = celulasmitad[i][j].estado;
+		//estados de la primera mitad del tablero
+		for i := 0 ; i < int(*columns)/2 ; i++{
+			for j := 0 ; j < (int(*rows)/2) ; j++{
+				MitadCelulas1[i][j].estado = celulas[i][j].estado
 			}	
 		}
-	}
+
+		//estados de la segunda mitad del tablero
+		for i := 0 ; i < int(*columns)/2 ; i++{
+			for j := 1 ; j < (int(*rows)/2)+1 ; j++{
+				MitadCelulas2[i][j].estado = celulas[i][j].estado
+			}	
+		}
+
+		for i := 0 ; i < int(*iteraciones) ; i++{
+			go func() {
+				defer wg.Done()
+				//recivimos el borde izquierdo del segundo sub tablero
+				for i := 0 ; i < (int(*rows)/int(*num_gorutines)) ; i++{
+					for j := (int(*rows)/int(*num_gorutines))-1 ; j < (int(*rows)/int(*num_gorutines)) ; j++{
+						MitadCelulas1[i][j].estado = <- array_channel_recivir[1]
+					}	
+				}
+				//check a todos los vecinos de cada celula
+				for j := 0 ; j < int(*columns)/int(*num_gorutines) ; j++{
+					for k := 0 ; k < int(*rows)/int(*num_gorutines) ; k++{
+						MitadCelulas1[j][k].numVecinos = checkVecinos(MitadCelulas1,j,k);
+					}	
+				}
+				//cambiar el estado de las celulas
+				for i := 0 ; i < int(*columns)/int(*num_gorutines) ; i++{
+					for j := 0 ; j < int(*rows)/int(*num_gorutines) ; j++{
+						if ((celulas[i][j].estado == CELULA_MUERTA && celulas[i][j].numVecinos >=3) || (celulas[i][j].estado == CELULA_VIVA && (celulas[i][j].numVecinos == 2 || celulas[i][j].numVecinos == 3 ))) {
+							celulas[i][j].estado = CELULA_VIVA;
+						}else{
+							celulas[i][j].estado = CELULA_MUERTA;
+						}
+					}	
+				}
 		
-	
+				//pasar borde derecho de la primera mitad del tablero
+				for i := 0 ; i < int(*columns) ; i++{
+					for j := (int(*rows)/int(*num_gorutines))-1 ; j < (int(*rows)/int(*num_gorutines)) ; j++{
+						array_channel_enviar[1] <- celulas[i][j].estado
+					}	
+				}
+		
+				//pasar el nuevo estado del primer lado del tablero
+				array_celulas_tablero[0] <- MitadCelulas1
+		
+			}()
+			
+			go func() {
+				defer wg.Done()
+				// pasar la fila derecha de la primera parte del tablero
+				for i := 0 ; i < (int(*columns)/int(*num_gorutines)) ; i++{
+					for j := 0 ; j < (int(*rows)/int(*num_gorutines)) - ((int(*rows)/int(*num_gorutines))-1) ; j++{
+						MitadCelulas2[i][j].estado = <- array_channel_recivir[0]
+					}	
+				}
+		
+				//check a todos los vecinos de cada celula
+				for j := 0 ; j < int(*columns)/int(*num_gorutines) ; j++{
+					for k := 0 ; k < int(*rows)/int(*num_gorutines) ; k++{
+						MitadCelulas2[j][k].numVecinos = checkVecinos(MitadCelulas2,j,k);
+					}	
+				}
+				//cambiar el estado de las celulas
+				for i := 0 ; i < int(*columns)/int(*num_gorutines) ; i++{
+					for j := 0 ; j < int(*rows)/int(*num_gorutines) ; j++{
+						if ((celulas[i][j].estado == CELULA_MUERTA && celulas[i][j].numVecinos >=3) || (celulas[i][j].estado == CELULA_VIVA && (celulas[i][j].numVecinos == 2 || celulas[i][j].numVecinos == 3 ))) {
+							celulas[i][j].estado = CELULA_VIVA;
+						}else{
+							celulas[i][j].estado = CELULA_MUERTA;
+						}
+					}	
+				}
+				//pasar borde izquierdo de la segunda mitad del tablero
+				for i := 0 ; i < int(*columns) ; i++{
+					for j := (int(*rows)/int(*num_gorutines)) ; j < (int(*rows)/int(*num_gorutines))+1; j++{
+						array_channel_enviar[2] <- celulas[i][j].estado
+					}	
+				}
+				//pasar el nuevo estado del segundo lado del tablero
+				array_celulas_tablero[1] <- MitadCelulas2
+		
+			}()
+
+			wg.Wait()
+
+			//obtener la primera mitad del tablero
+			celulasmitad = <- array_celulas_tablero[1]
+			for i := 0 ; i < int(*columns) ; i++{
+				for j := 0 ; j < (int(*rows)/int(*num_gorutines)) ; j++{
+					celulas[i][j].estado = celulasmitad[i][j].estado;
+				}	
+			}
+
+			//obtener la segunda mitad del tablero
+			celulasmitad = <- array_celulas_tablero[2]
+			for i := 0 ; i < int(*columns) ; i++{
+				for j := int(*rows)/int(*num_gorutines) ; j < int(*rows) ; j++{
+					celulas[i][j].estado = celulasmitad[i][j].estado;
+				}	
+			}
+		}	
+	}
+
 	/*
 	//imprimir el primer estado del tablero
 	for j := range tablero {
